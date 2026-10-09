@@ -1,148 +1,124 @@
 # Fraud Detection System
 
-A Java Swing desktop application that detects potentially fraudulent financial transactions using rule-based checks (and an optional trained ML classifier), with a real-time transaction simulation and a dashboard UI.
+A Java Swing desktop application that detects suspicious financial transactions in real time. It ships as **two apps on one shared MySQL database**: a **Bank / Analyst app** (monitoring, administration) and a **Customer app** (sign-up, payments, and a "Was this you?" review of flagged payments).
 
-## Description
+## Why this project
 
-Manual review of financial transactions is slow and misses patterns that are only obvious when checked systematically — for example, an unusually large amount, too many transactions from the same user in a short window, or a transaction from a location the user doesn't normally use. This project automates that check: every transaction is run through a set of detection rules, flagged if suspicious, and shown on a live dashboard.
+Manual review of transactions is slow and misses patterns that are obvious when checked systematically: an unusually large amount, too many payments in a short window, or a payment from a place the customer never uses. This project automates those checks and puts the customer in the loop, the way real banks do.
 
 ## Features
 
-**Bank / Admin side (`Main.java`):**
-- **Admin Authentication gate** (default password: `admin123`)
-- Register users and record transactions on their behalf
-- **System Configuration Panel** — dynamically configure detection thresholds (amount threshold, velocity count, time window) at runtime
-- **Algorithm Management Panel** — enable/disable specific detection rules and reload/re-train the ML model at runtime
-- Automatic fraud detection on every transaction using pluggable detectors:
-  - **Amount Rule** — flags unusually large transactions
-  - **Velocity Rule** — flags too many transactions from one user in a short time window
-  - **Location Rule** — flags a transaction from a location that doesn't match the user's usual one
-  - **ML Classifier (Weka J48 Decision Tree)** — machine learning classifier trained on transaction data
-- Alerts are stored and viewable in a dedicated screen
-- **Live simulation** — a background thread generates sample transactions automatically so the dashboard updates in real time
-- Dashboard with summary stats, risk meters, and a trend chart of recent transaction amounts
+**Customer app** (`CustomerMain`)
+- Sign up and log in; each customer only ever sees their own data
+- Make a payment, which runs through the fraud rules instantly with a live risk-confidence meter
+- "Was This You?" screen: confirm a flagged payment (it is approved) or deny it (it is blocked)
 
-**Customer side (`CustomerMain.java` or launcher in `Main.java`):**
-- Login screen — a customer only ever sees their own data, never anyone else's
-- **Make a Payment** — submits a transaction through the fraud detection pipeline
-- **Instant Security Alert** — immediate warning notification if a transaction is flagged as high risk
-- **"Was This You?"** — customer alerts screen where customers review flagged transactions and confirm or dispute them directly
-- Both apps read/write the same MySQL database via a shared `AppContext`
+**Bank / Analyst app** (`Main`)
+- Dashboard: live totals, recent-amount chart, recent transactions with status badges
+- Add transactions manually, manage users, and view the full alert audit log
+- **Resolution column** on every alert: `PENDING` (customer has not responded), `APPROVED` (customer confirmed it was them) or `BLOCKED` (customer denied it)
+- **System Config**: change the amount threshold, velocity limit and time window without touching code
+- **Algorithms**: switch individual detectors on/off (Amount, Velocity, Location, ML classifier) and reload the ML model
+- **Live simulation**: a background thread generates transactions so the dashboard updates in real time
 
-**Honest scope note:** running two Swing apps against one local MySQL database demonstrates the *architecture* of a two-sided fraud system (separate audiences, shared detection logic, per-user data isolation). It is not production-ready — see [Limitations](#limitations--real-world-gap) below.
+**Detection** (all implement one `FraudDetector` interface)
+- Amount rule, Velocity rule, Location rule
+- Optional Weka **J48 decision tree** trained from `resources/training_data.arff`
 
-## Tech Stack
+## Tech stack
 
 | Layer | Technology |
 |---|---|
-| Language | Core Java (JDK 11+) |
-| Database | MySQL 8.x via JDBC |
-| GUI | Java Swing (Nimbus look-and-feel + custom styling) |
-| Concurrency | Java Thread/Runnable, `synchronized` |
-| Bonus ML | Weka (J48 decision tree) |
+| Language | Java (JDK 11+) |
+| GUI | Swing, custom-painted components |
+| Database | MySQL 8 via JDBC (DAO pattern, PreparedStatement) |
+| ML (optional) | Weka J48 |
+| Build | Maven (dependencies download automatically) |
+| Concurrency | `Thread` / `Runnable`, `synchronized` |
 
-## Project Structure
+## Architecture
+
+`GUI -> Service -> DAO -> JDBC -> MySQL`. The GUI never contains SQL. Both apps build one shared `AppContext` (DAOs plus the detection service), so they always apply identical rules.
 
 ```
-FraudDetectionSystem/
-├── src/com/frauddetection/
-│   ├── model/          # User, Transaction, Alert (POJOs)
-│   ├── dao/             # DBConnection, UserDAO, TransactionDAO, AlertDAO (all JDBC/SQL lives here)
-│   ├── service/         # FraudDetector interface + rule implementations, FraudDetectionService,
-│   │                     TransactionSimulator, DetectionResult, MLClassifierDetector (bonus)
-│   ├── exception/       # InvalidTransactionException
-│   ├── util/            # DBConfig (single place for DB credentials)
-│   ├── gui/              # MainDashboard, DashboardPanel, AddTransactionPanel, UsersPanel, AlertsPanel
-│   │                      (bank side); LoginPanel, CustomerApp, CustomerHomePanel, MakePaymentPanel,
-│   │                      MyAlertsPanel (customer side); UITheme, RoundedPanel, StyledButton, MiniBarChart (shared)
-│   ├── AppContext.java  # builds DAOs + detection service ONCE, shared by both apps
-│   ├── Main.java        # entry point — BANK / ANALYST app
-│   └── CustomerMain.java # entry point — CUSTOMER app
-├── resources/
-│   ├── schema.sql        # MySQL table definitions + sample data (fresh install)
-│   ├── migration_add_password.sql  # run only if you created the DB before password_hash existed
-│   └── training_data.arff # sample labeled data for the bonus ML classifier
-├── lib/                  # place mysql-connector-j.jar (required) and weka.jar (optional) here
-├── OOP_MAPPING.md        # rubric concept → exact class/line mapping
-├── README.md
-└── .gitignore
+src/com/frauddetection/
+├── model/       User, Transaction, Alert
+├── dao/         DBConnection, UserDAO, TransactionDAO, AlertDAO
+├── service/     FraudDetector + detectors, FraudDetectionService, TransactionSimulator
+├── exception/   InvalidTransactionException
+├── util/        DBConfig (reads db.properties)
+├── gui/         screens for both apps, plus shared theme components
+├── AppContext.java
+├── Main.java            (bank app entry point)
+└── CustomerMain.java    (customer app entry point)
+resources/       schema.sql, reset_demo_data.sql, training_data.arff
 ```
 
-**Architecture:** `GUI → Service → DAO → JDBC → MySQL` — the GUI never writes SQL directly; it always goes through the service layer, which goes through the DAO layer. Both `Main` and `CustomerMain` build one `AppContext` each and share the identical DAO/detector wiring, so the two apps can never silently drift apart (e.g. different fraud thresholds).
+## Setup
 
-## Requirements
+**Requirements:** JDK 11+, MySQL 8, Maven (or an IDE with Maven support, e.g. IntelliJ / VS Code / Antigravity).
 
-- JDK 11 or higher
-- MySQL 8.x
-- [MySQL Connector/J](https://dev.mysql.com/downloads/connector/j/) (JDBC driver — required)
-- [Weka](https://waikato.github.io/weka-wiki/downloading_weka/) (only if you enable the bonus ML classifier)
-
-## Database Setup
-
-1. Start MySQL and run the schema script:
-   ```bash
+1. **Create the database**
+   ```
    mysql -u root -p < resources/schema.sql
    ```
-   This creates the `fraud_detection` database, all three tables, and a few sample rows — including 3 demo customer logins (see below).
-   **Already have the database from before the customer-login feature?** Run `resources/migration_add_password.sql` instead of recreating everything from scratch — it just adds the missing column.
-2. Open `src/com/frauddetection/util/DBConfig.java` and update `USERNAME`/`PASSWORD` to match your MySQL setup.
+2. **Add your DB credentials.** Copy `db.properties.example` to `db.properties` (same folder as `pom.xml`) and set your MySQL password. This file is git-ignored, so your password is never uploaded.
+3. **Run**
+   - In your IDE, run `com.frauddetection.Main` (bank app) and `com.frauddetection.CustomerMain` (customer app), or
+   - From a terminal in the project folder:
+     ```
+     mvn compile org.codehaus.mojo:exec-maven-plugin:3.5.1:java -Dexec.mainClass=com.frauddetection.Main
+     mvn compile org.codehaus.mojo:exec-maven-plugin:3.5.1:java -Dexec.mainClass=com.frauddetection.CustomerMain
+     ```
 
-## How to Run
+Open both apps at the same time to see them share data.
 
-1. Download `mysql-connector-j-<version>.jar` and place it in `lib/`.
-2. Compile:
-   ```bash
-   javac -cp "lib/*" -d bin $(find src -name "*.java")
-   ```
-   *(To also compile the bonus ML classifier, add `weka.jar` to `lib/` first — it's excluded above by default since it's optional.)*
-3. Run the **bank/analyst app**:
-   ```bash
-   java -cp "bin:lib/*" com.frauddetection.Main
-   ```
-4. Run the **customer app** (in a separate terminal — it's a separate window/process, sharing the same database):
-   ```bash
-   java -cp "bin:lib/*" com.frauddetection.CustomerMain
-   ```
-   Log in with one of the sample accounts: `rahul_k` / `priya_s` / `aman_v`, password `pass123`.
+## Demo accounts
 
-   *(On Windows, use `;` instead of `:` in the classpath: `java -cp "bin;lib/*" com.frauddetection.Main`)*
+| Username | Password |
+|---|---|
+| rahul_k | pass123 |
+| priya_s | pass123 |
+| aman_v | pass123 |
 
-**Try this to see both sides connect:** make a payment on the customer app with a large amount (>₹5000) or location "Unknown-VPN" → it gets flagged → switch to the bank app's Alerts screen (or refresh the Dashboard) → the same alert appears there, since both apps share one MySQL database via `AppContext`.
+Or create a new account from the customer app's sign-up screen. It appears on the bank app's Users screen straight away.
 
-## Machine Learning Classifier (Weka J48)
+## Try the full flow
 
-The system includes a trained **Weka J48 Decision Tree** model (`MLClassifierDetector.java`) that operates alongside the rule-based detectors. `weka-stable-3.8.6.jar` is included in `lib/`.
-- Training dataset: `training_data.arff` (labeled transaction amounts, hours, VPN flags, and fraud class).
-- Dynamic retraining/reloading: Admin can retrain or reload the model on demand from the **Algorithms** tab.
+1. Customer app: log in as `rahul_k` and pay an amount above the threshold, or use location `Unknown-VPN`. The payment is flagged and the risk meter jumps.
+2. Bank app, **Alerts**: the new alert shows `PENDING`.
+3. Customer app, **Was This You?**: click "No, this wasn't me".
+4. Bank app, **Alerts**: the same alert now shows `BLOCKED`. If the customer clicks "Yes, this was me" instead, it shows `APPROVED`.
 
 ## Screenshots
 
-*(Add screenshots of the Dashboard, Add Transaction, Users, Alerts, System Config, and Algorithm screens here after running the app.)*
+| Bank app | |
+|---|---|
+| Dashboard | ![Dashboard](screenshots/bank-dashboard.png) |
+| Alerts with resolution | ![Alerts](screenshots/bank-alerts.png) |
+| Users | ![Users](screenshots/bank-users.png) |
+| Add transaction | ![Add Transaction](screenshots/bank-add-transaction.png) |
+| System config | ![System Config](screenshots/bank-system-config.png) |
+| Algorithms | ![Algorithms](screenshots/bank-algorithms.png) |
 
-## Rubric Coverage
+| Customer app | |
+|---|---|
+| Login | ![Login](screenshots/customer-login.png) |
+| Home | ![Home](screenshots/customer-home.png) |
+| Make a payment | ![Payment](screenshots/customer-payment.png) |
+| Was this you? | ![Was This You](screenshots/customer-was-this-you.png) |
 
-See [`OOP_MAPPING.md`](./OOP_MAPPING.md) for exactly where every rubric concept (OOP, Collections, Generics, Multithreading, JDBC, DAO classes) is implemented.
+## Concepts demonstrated
 
-## Limitations & Real-World Gap
+See [`OOP_MAPPING.md`](./OOP_MAPPING.md) for exactly where each concept lives: OOP (interfaces, polymorphism, inheritance, exceptions), collections and generics, multithreading and synchronization, JDBC and DAO classes, SQL joins.
 
-This project demonstrates the *shape* of a two-sided fraud detection system (bank + customer, shared detection logic, per-user data isolation) — it is intentionally not production-grade. Specifically:
+## Limitations (honest scope)
 
-- **Passwords are stored in plain text** for simplicity. A real system must use a salted hash (e.g. BCrypt) and never select the password back out of the database at all.
-- **No real-time constraint.** A real payment must be scored in well under 100ms, inline with the transaction. This project has no such latency requirement.
-- **Single MySQL instance, single JVM per app.** Real transaction volume needs horizontal scaling, message queues (Kafka), and no single point of failure.
-- **The ML classifier trains on 40 sample rows.** Real fraud models train on millions of labeled transactions and are retrained continuously as patterns shift.
-- **No encryption in transit, no compliance layer** (PCI-DSS, RBI guidelines, audit trails) — required for any real financial product.
-
-Naming these gaps explicitly (rather than pretending the prototype is production-ready) is itself part of demonstrating understanding of the problem space — worth raising directly in viva if asked "would this work in a real bank?"
-
-## Status / Roadmap
-
-- ✅ Review 1: project structure, database design, DB connectivity, UI/UX design
-- ✅ Core implementation: DAO/JDBC layer, rule-based detection, multithreaded simulation, Swing dashboard
-- ✅ Machine Learning: trained Weka J48 classifier active with dynamic reloading & toggle controls
-- ✅ System Configuration & Algorithm Management panels for Admin
-- ✅ Immediate Security Alert popups & dispute review for Customers
-- ⏳ Unit tests (JUnit) — planned for next milestone
+This is a prototype that demonstrates the architecture of a two-sided fraud system. It is not production-ready:
+- Passwords are stored as plain text. A real system must use a salted hash (e.g. BCrypt).
+- No real-time latency guarantee, no encryption in transit, no compliance layer (PCI-DSS, audit trails).
+- Single MySQL instance and single JVM per app; real volumes need queues and horizontal scaling.
+- The ML model trains on a small sample file, not real labelled data.
 
 ## Team
 

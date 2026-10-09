@@ -1,0 +1,5 @@
+# Copy this file to "db.properties" (same folder as pom.xml) and fill in your MySQL details.
+# db.properties is git-ignored, so your real password is never uploaded.
+db.url=jdbc:mysql://localhost:3306/fraud_detection?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+db.user=root
+db.password=your_mysql_password

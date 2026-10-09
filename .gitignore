@@ -1,0 +1,23 @@
+# Local secrets / machine-specific config
+db.properties
+fraud_detection_config
+
+# Build output
+target/
+bin/
+out/
+*.class
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# Logs / OS files
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
