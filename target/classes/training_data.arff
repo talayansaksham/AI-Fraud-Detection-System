@@ -1,0 +1,48 @@
+@RELATION fraud_training_data
+
+@ATTRIBUTE amount NUMERIC
+@ATTRIBUTE hour NUMERIC
+@ATTRIBUTE location_risk NUMERIC
+@ATTRIBUTE class {fraud,legitimate}
+
+@DATA
+120.50,10,0,legitimate
+340.00,14,0,legitimate
+95.25,9,0,legitimate
+8500.00,2,1,fraud
+7600.00,3,1,fraud
+250.00,12,0,legitimate
+180.75,11,0,legitimate
+9200.00,1,1,fraud
+430.00,15,0,legitimate
+310.00,13,0,legitimate
+8900.00,2,1,fraud
+75.00,10,0,legitimate
+6200.00,3,1,fraud
+150.00,16,0,legitimate
+220.00,17,0,legitimate
+9800.00,1,1,fraud
+600.00,18,0,legitimate
+7100.00,2,1,fraud
+90.00,9,0,legitimate
+410.00,14,0,legitimate
+8300.00,3,1,fraud
+199.99,12,0,legitimate
+275.50,11,0,legitimate
+9600.00,2,1,fraud
+130.00,10,0,legitimate
+7800.00,1,1,fraud
+360.00,15,0,legitimate
+210.00,13,0,legitimate
+8700.00,2,1,fraud
+145.00,16,0,legitimate
+6900.00,3,1,fraud
+280.00,17,0,legitimate
+99.50,9,0,legitimate
+9100.00,1,1,fraud
+500.00,14,0,legitimate
+7300.00,2,1,fraud
+160.00,11,0,legitimate
+8100.00,3,1,fraud
+320.00,12,0,legitimate
+9400.00,1,1,fraud
