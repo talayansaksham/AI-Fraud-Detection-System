@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Fraud Detection System
 
 A Java Swing desktop application that detects suspicious financial transactions in real time. It ships as **two apps on one shared MySQL database**: a **Bank / Analyst app** (monitoring, administration) and a **Customer app** (sign-up, payments, and a "Was this you?" review of flagged payments).
@@ -123,3 +124,6 @@ This is a prototype that demonstrates the architecture of a two-sided fraud syst
 ## Team
 
 - Name / Roll No.: ____________________
+=======
+# AI-Fraud-Detection-System
+>>>>>>> 7b76e2bf7c12d88f5bf7332c25b96e1d387b82c5
